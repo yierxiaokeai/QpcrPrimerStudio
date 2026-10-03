@@ -1,0 +1,41 @@
+<Window x:Class="QpcrPrimerStudio.Desktop.SearchCriteriaDialog"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+ Title="Search Criteria · 搜索条件" Width="620" MinWidth="570" MinHeight="440" WindowStyle="None" ResizeMode="CanResize"
+ WindowStartupLocation="CenterOwner" ShowInTaskbar="False" Background="{DynamicResource CardBrush}">
+ <Window.Style><Style TargetType="Window"><Setter Property="Height" Value="580" /><Style.Triggers><DataTrigger Binding="{Binding AdvancedMode}" Value="True"><Setter Property="Height" Value="680" /></DataTrigger></Style.Triggers></Style></Window.Style>
+ <Border BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="18">
+  <Grid><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+   <Grid Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBlock Text="Search Criteria · 搜索条件" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" /><Button x:Name="CloseDialogButton" Grid.Column="1" Content="关闭" IsCancel="True" shell:WindowChrome.IsHitTestVisibleInChrome="True" /></Grid>
+   <ScrollViewer Grid.Row="1" IsEnabled="{Binding CanEdit}" Style="{StaticResource ReservedScrollViewer}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="0,0,8,0">
+     <Border Background="{DynamicResource CanvasBrush}" CornerRadius="6" Padding="10" Margin="0,0,0,8"><StackPanel><TextBlock Text="SYBR Green RT-qPCR · PCR 引物" FontWeight="SemiBold" /><TextBlock Text="选择搜索类型，再确认区域与长度条件。" Style="{StaticResource Caption}" /><ComboBox x:Name="SearchTypeInput" ItemsSource="{Binding Choices}" DisplayMemberPath="Label" SelectedValuePath="Kind" SelectedValue="{Binding Kind}" /></StackPanel></Border>
+     <StackPanel Orientation="Horizontal"><Button x:Name="RecommendParametersButton" Content="智能推荐参数" Click="RecommendParameters" ToolTip="按当前模板实际试算，展示结果后应用推荐参数。" /><Button x:Name="ApplyRecommendationButton" Content="应用推荐参数" Click="ApplyRecommendation" IsEnabled="False" /></StackPanel>
+     <Expander x:Name="RecommendationDetails" Header="推荐依据与试算结果" Margin="0,4,0,8"><ScrollViewer MaxHeight="180" VerticalScrollBarVisibility="Auto"><TextBlock x:Name="RecommendationText" Style="{StaticResource Caption}" TextWrapping="Wrap" Text="先按当前条件试算，优先采用常规 qPCR 参数；无候选时检查扩大搜索范围的结果。" /></ScrollViewer></Expander>
+     <CheckBox Content="统一搜索参数用于本工程全部基因" IsChecked="{Binding ApplyToWholeProject}" Margin="0,0,0,4" />
+     <TextBlock Text="共享 Tm、GC、引物长度、产物长度及返回数量；各基因单独区域和反应体系保留。开始搜索后生效。" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,6" />
+     <CheckBox Content="重新使用全模板范围" IsChecked="{Binding ClearCustomRegions}" Margin="0,0,0,4" />
+     <TextBlock Text="勾选后清除本次搜索的手动包含、排除及 F/R 范围。CDS、变异及末端避让策略仍按设计条件执行。" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,8" />
+     <TextBlock Text="搜索范围 · 模板正链坐标，1-based，包含末位" FontWeight="SemiBold" />
+     <Grid Margin="0,4,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="12" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+      <StackPanel IsEnabled="{Binding UsesForwardRange}"><TextBlock Text="Sense / Forward · 起点 — 末位" /><UniformGrid Columns="2"><TextBox x:Name="ForwardStartInput" Text="{Binding ForwardStart}" Margin="0,4,6,4" /><TextBox x:Name="ForwardEndInput" Text="{Binding ForwardEnd}" Margin="0,4,0,4" /></UniformGrid></StackPanel>
+      <StackPanel Grid.Column="2" IsEnabled="{Binding UsesReverseRange}"><TextBlock Text="Anti-sense / Reverse · 起点 — 末位" /><UniformGrid Columns="2"><TextBox Text="{Binding ReverseStart}" Margin="0,4,6,4" /><TextBox Text="{Binding ReverseEnd}" Margin="0,4,0,4" /></UniformGrid></StackPanel>
+     </Grid>
+     <TextBlock Text="末位留空表示模板末端。R 也使用正链坐标；引物输出保持 5′→3′。" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,8" />
+     <StackPanel Visibility="{Binding NeedsFixedForward, Converter={StaticResource BoolVisibility}}"><TextBlock Text="固定 Sense / Forward · 5′→3′" /><TextBox Text="{Binding Forward}" FontFamily="Consolas" /></StackPanel>
+     <StackPanel Visibility="{Binding NeedsFixedReverse, Converter={StaticResource BoolVisibility}}"><TextBlock Text="固定 Anti-sense / Reverse · 5′→3′" /><TextBox Text="{Binding Reverse}" FontFamily="Consolas" /></StackPanel>
+     <TextBlock Text="引物长度 nt · 最小 / 最佳 / 最大" /><UniformGrid Columns="3"><TextBox Text="{Binding MinLength}" Margin="0,4,8,8" /><TextBox Text="{Binding OptLength}" Margin="0,4,8,8" /><TextBox Text="{Binding MaxLength}" Margin="0,4,0,8" /></UniformGrid>
+     <StackPanel IsEnabled="{Binding IsPairSearch}"><TextBlock Text="PCR Product · 产物长度 bp · 最小 / 最大" /><UniformGrid Columns="2"><TextBox Text="{Binding MinProduct}" Margin="0,4,8,8" /><TextBox Text="{Binding MaxProduct}" Margin="0,4,0,8" /></UniformGrid></StackPanel>
+     <CheckBox Content="专业模式" IsChecked="{Binding AdvancedMode}" Margin="0,8,0,6" />
+     <StackPanel x:Name="AdvancedSearchFields" Visibility="{Binding AdvancedMode, Converter={StaticResource BoolVisibility}}">
+      <TextBlock Text="Tm °C · 最小 / 最佳 / 最大" /><UniformGrid Columns="3"><TextBox Text="{Binding MinTm}" Margin="0,4,8,8" /><TextBox Text="{Binding OptTm}" Margin="0,4,8,8" /><TextBox Text="{Binding MaxTm}" Margin="0,4,0,8" /></UniformGrid>
+      <TextBlock Text="GC% · 最小 / 最大" /><UniformGrid Columns="2"><TextBox Text="{Binding MinGc}" Margin="0,4,8,8" /><TextBox Text="{Binding MaxGc}" Margin="0,4,0,8" /></UniformGrid>
+      <TextBlock Text="返回数量 · 每个列表最多 100" /><TextBox Text="{Binding Count}" />
+      <TextBlock Text="区域策略、反应体系与结构限制沿用设计条件中的设置。" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,4,0,4" />
+     </StackPanel>
+     <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,4,0,4"><Run Text="Tm " /><Run Text="{Binding MinTm}" /><Run Text="–" /><Run Text="{Binding MaxTm}" /><Run Text=" °C · GC " /><Run Text="{Binding MinGc}" /><Run Text="–" /><Run Text="{Binding MaxGc}" /><Run Text="% · 最多 " /><Run Text="{Binding Count}" /><Run Text=" 条；其他条件保留当前设置。" /></TextBlock>
+    </StackPanel>
+   </ScrollViewer>
+   <StackPanel Grid.Row="2" Margin="0,10,0,0"><TextBlock x:Name="Feedback" TextWrapping="Wrap" Foreground="{DynamicResource AccentBrush}" /><StackPanel Orientation="Horizontal" HorizontalAlignment="Right"><Button x:Name="CancelRecommendationButton" Content="停止试算" Visibility="Collapsed" Click="CancelRecommendation" /><Button Content="取消" IsCancel="True" /><Button x:Name="StartSearchButton" Content="Search · 开始搜索" IsEnabled="{Binding CanEdit}" IsDefault="True" Style="{StaticResource Primary}" Click="StartSearch" /></StackPanel></StackPanel>
+  </Grid>
+ </Border>
+</Window>

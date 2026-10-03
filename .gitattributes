@@ -1,0 +1,8 @@
+* text=auto
+*.md text eol=lf
+*.cs text eol=lf
+*.xaml text eol=lf
+*.csproj text eol=lf
+*.json text eol=lf
+# Preserve upstream license formatting without applying source whitespace checks.
+tools/reference/NODE-LICENSE -whitespace

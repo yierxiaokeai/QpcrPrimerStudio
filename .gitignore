@@ -1,0 +1,58 @@
+# Build and editor output
+**/bin/
+**/obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.nupkg
+*.snupkg
+TestResults/
+artifacts/
+
+# Local audit, design notes, and publication staging
+coordination/
+docs/
+[Rr]elease/
+[Rr]eleases/
+dist/
+
+# Python research environments
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local sequence databases and experiment data
+data/local/
+databases/
+*.qpcrproject
+*.qpcrreference
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# Local configuration and credentials
+.env
+.env.*
+
+# Downloaded engines and dependency caches; reproducible setup scripts are tracked
+tools/primer3/
+tools/blast/
+tools/source/
+.packages/
+.cli/
+*.log
+tools/reference/node.exe
+tools/reference/node_modules/
+
+# Generated packages, native tools, and recovery files
+*.exe
+*.dll
+*.zip
+*.7z
+*.tar.gz
+*.pending
+*.write-lock
+*.backup-*

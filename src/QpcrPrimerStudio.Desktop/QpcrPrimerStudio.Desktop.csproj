@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF><AssemblyName>QpcrPrimerStudio</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets/app.ico</ApplicationIcon>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+    <EnableCompressionInSingleFile Condition="'$(SelfContained)' == 'true'">true</EnableCompressionInSingleFile>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="Switch.System.Windows.Appearance.DisableFluentThemeWindowBackdrop" Value="true" />
+    <Resource Include="Assets/app.ico" />
+    <Resource Include="Assets/app.png" />
+    <ProjectReference Include="../QpcrPrimerStudio.Core/QpcrPrimerStudio.Core.csproj" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Markdig" Version="1.4.0" />
+    <EmbeddedResource Include="Help/*.md" />
+    <Content Include="../../tools/primer3/primer3-2.6.1/src/*.exe" Link="tools/primer3/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../tools/primer3/primer3-2.6.1/src/*.dll" Link="tools/primer3/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../tools/primer3/primer3-2.6.1/src/runtime-licenses/**/*" Link="tools/primer3/runtime-licenses/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../tools/primer3/primer3-2.6.1/LICENSE" Link="tools/primer3/LICENSE" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../tools/primer3/primer3-2.6.1/src/primer3_config/**/*" Link="tools/primer3/primer3_config/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../tools/blast/ncbi-blast-2.14.0+/bin/*.exe" Link="tools/blast/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../tools/blast/ncbi-blast-2.14.0+/bin/*.dll" Link="tools/blast/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../tools/blast/ncbi-blast-2.14.0+/LICENSE" Link="tools/blast/LICENSE" CopyToOutputDirectory="PreserveNewest" Condition="Exists('../../tools/blast/ncbi-blast-2.14.0+/LICENSE')" />
+    <Content Include="../../tools/blast/ncbi-blast-2.14.0+/*-LICENSE" Link="tools/blast/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../tools/blast/ncbi-blast-2.14.0+/UGENE-LICENSE.txt" Link="tools/blast/UGENE-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" Condition="Exists('../../tools/blast/ncbi-blast-2.14.0+/UGENE-LICENSE.txt')" />
+    <Content Include="../../tools/reference/**/*" Exclude="../../tools/reference/package-lock.json" Link="tools/reference/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

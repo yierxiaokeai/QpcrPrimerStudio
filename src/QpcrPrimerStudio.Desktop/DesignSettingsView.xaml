@@ -1,0 +1,59 @@
+<UserControl x:Class="QpcrPrimerStudio.Desktop.DesignSettingsView"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:local="clr-namespace:QpcrPrimerStudio.Desktop" FontWeight="Normal">
+ <UserControl.Resources><local:DesignOptionConverter x:Key="OptionLabel" /><Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}"><Setter Property="TextWrapping" Value="Wrap" /></Style><DataTemplate x:Key="OptionTemplate"><TextBlock Text="{Binding Converter={StaticResource OptionLabel}}" /></DataTemplate></UserControl.Resources>
+ <ScrollViewer x:Name="SettingsScroll" Style="{StaticResource ReservedScrollViewer}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,12,0,0">
+  <StackPanel Margin="0,0,12,12">
+   <TextBlock Text="设计条件" FontSize="19" FontWeight="SemiBold" /><TextBlock Text="常用参数按用途分组，反应体系与评分设置可展开调整。" Style="{StaticResource Caption}" Margin="0,4,0,16" />
+   <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+    <Border Style="{StaticResource Card}" Padding="16"><StackPanel>
+     <TextBlock Text="检测目标" Style="{StaticResource SectionTitle}" />
+     <TextBlock Text="目标区域" /><ComboBox ItemsSource="{Binding RegionModes}" SelectedItem="{Binding RegionMode}" ItemTemplate="{StaticResource OptionTemplate}" />
+     <TextBlock Text="表达目标" /><ComboBox ItemsSource="{Binding ExpressionModes}" SelectedItem="{Binding ExpressionMode}" ItemTemplate="{StaticResource OptionTemplate}" />
+     <TextBlock Text="当前基因要求覆盖的参考转录本 ID（逗号分隔）" /><TextBox Text="{Binding CoverageText, UpdateSourceTrigger=PropertyChanged}" />
+     <TextBlock Text="指定转录本集合时使用；保存序列后归属于当前基因。预期转录本栏用于数据库特异性检查。" Style="{StaticResource Caption}" />
+     <TextBlock Text="避开转录本两端 · 5′ / 3′（nt）" /><UniformGrid Columns="2"><TextBox Text="{Binding AvoidFivePrime}" Margin="0,4,8,12" /><TextBox Text="{Binding AvoidThreePrime}" Margin="0,4,0,12" /></UniformGrid>
+     <CheckBox Content="避让已提供的 SNP / Indel" IsChecked="{Binding AvoidVariants}" /><CheckBox Content="排除 3′ 末端窗口内的变异" IsChecked="{Binding RejectTerminalVariants}" />
+     <CheckBox Content="要求引物跨外显子连接位点" IsChecked="{Binding RequireJunction}" />
+     <CheckBox Content="设计后检查已配置的特异性数据库" IsChecked="{Binding AutoSpecificity}" />
+    </StackPanel></Border>
+    <Border Grid.Column="2" Style="{StaticResource Card}" Padding="16"><StackPanel>
+     <TextBlock Text="引物与产物" Style="{StaticResource SectionTitle}" />
+     <TextBlock Text="扩增子长度 · 最小 / 最大（bp）" /><UniformGrid Columns="2"><TextBox Text="{Binding MinProduct}" Margin="0,4,8,12" /><TextBox Text="{Binding MaxProduct}" Margin="0,4,0,12" /></UniformGrid>
+     <TextBlock Text="最佳 Tm（°C） / 候选数量" /><UniformGrid Columns="2"><TextBox Text="{Binding OptTm}" Margin="0,4,8,12" /><TextBox Text="{Binding ReturnCount}" Margin="0,4,0,12" /></UniformGrid>
+     <Expander Header="长度、Tm 与 GC 范围" IsExpanded="True"><StackPanel Margin="0,10,0,0">
+      <TextBlock Text="引物长度 · 最小 / 最佳 / 最大（nt）" /><UniformGrid Columns="3"><TextBox Text="{Binding MinLength}" Margin="0,4,8,12" /><TextBox Text="{Binding OptLength}" Margin="0,4,8,12" /><TextBox Text="{Binding MaxLength}" Margin="0,4,0,12" /></UniformGrid>
+      <TextBlock Text="Tm · 最小 / 最大（°C）" /><UniformGrid Columns="2"><TextBox Text="{Binding MinTm}" Margin="0,4,8,12" /><TextBox Text="{Binding MaxTm}" Margin="0,4,0,12" /></UniformGrid>
+      <TextBlock Text="GC · 最小 / 最大（%）" /><UniformGrid Columns="2"><TextBox Text="{Binding MinGc}" Margin="0,4,8,12" /><TextBox Text="{Binding MaxGc}" Margin="0,4,0,12" /></UniformGrid>
+      <TextBlock Text="最大 Tm 差（°C）" /><TextBox Text="{Binding MaxTmDifference}" />
+     </StackPanel></Expander>
+     <TextBlock Text="当前设置用于新设计与已有引物评估。" Style="{StaticResource Caption}" Margin="0,12,0,0" />
+    </StackPanel></Border>
+   </Grid>
+   <WrapPanel Margin="0,16,0,10"><CheckBox Content="专业模式" IsChecked="{Binding AdvancedMode}" Margin="0,4,20,8" /><Button Content="保存参数预设" Command="{Binding SavePresetCommand}" /><Button Content="载入预设" Command="{Binding LoadPresetCommand}" /><Button Content="保存为当前靶标专用参数" Command="{Binding TargetOverrideCommand}" /></WrapPanel>
+   <Grid Visibility="{Binding AdvancedMode, Converter={StaticResource BoolVisibility}}"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+    <Border Style="{StaticResource Card}" Padding="16"><StackPanel>
+     <TextBlock Text="反应体系与结构限制" Style="{StaticResource SectionTitle}" />
+     <TextBlock Text="单价盐 / Mg²⁺（mM）" /><UniformGrid Columns="2"><TextBox Text="{Binding MonovalentMm}" Margin="0,4,8,12" /><TextBox Text="{Binding MagnesiumMm}" Margin="0,4,0,12" /></UniformGrid>
+     <TextBlock Text="dNTP 总浓度（mM） / 引物（nM）" /><UniformGrid Columns="2"><TextBox Text="{Binding DntpMm}" Margin="0,4,8,12" /><TextBox Text="{Binding PrimerNm}" Margin="0,4,0,12" /></UniformGrid>
+     <TextBlock Text="发卡 / 自二聚体 ANY 最大结构 Tm（°C）" /><UniformGrid Columns="2"><TextBox Text="{Binding MaxHairpinTm}" Margin="0,4,8,12" /><TextBox Text="{Binding MaxSelfAnyTm}" Margin="0,4,0,12" /></UniformGrid>
+     <TextBlock Text="自二聚体 END / 异二聚体 END 最大 Tm" /><UniformGrid Columns="2"><TextBox Text="{Binding MaxSelfEndTm}" Margin="0,4,8,12" /><TextBox Text="{Binding MaxPairEndTm}" Margin="0,4,0,12" /></UniformGrid>
+     <TextBlock Text="异二聚体 ANY 最大 Tm / GC clamp" /><UniformGrid Columns="2"><TextBox Text="{Binding MaxPairAnyTm}" Margin="0,4,8,12" /><TextBox Text="{Binding GcClamp}" Margin="0,4,0,12" /></UniformGrid>
+     <TextBlock Text="连续相同碱基上限" /><TextBox Text="{Binding MaxHomopolymer}" />
+    </StackPanel></Border>
+    <Border Grid.Column="2" Style="{StaticResource Card}" Padding="16"><StackPanel>
+     <TextBlock Text="区域、变异与评分" Style="{StaticResource SectionTitle}" />
+     <TextBlock Text="连接位点两侧最小重叠 · 5′ / 3′（nt）" /><UniformGrid Columns="2"><TextBox Text="{Binding JunctionOverlap5}" Margin="0,4,8,12" /><TextBox Text="{Binding JunctionOverlap3}" Margin="0,4,0,12" /></UniformGrid>
+     <TextBlock Text="包含区域 · 起点 / 长度（0 表示完整模板）" /><UniformGrid Columns="2"><TextBox Text="{Binding IncludedStart}" Margin="0,4,8,12" /><TextBox Text="{Binding IncludedLength}" Margin="0,4,0,12" /></UniformGrid>
+     <TextBlock Text="排除区域 · 起点,长度；多项用分号分隔" /><TextBox Text="{Binding ExcludedText}" ToolTip="例如 1,30;150,20，起点为 1-based。" />
+     <TextBlock Text="Forward 搜索区域 · 起点 / 长度" /><UniformGrid Columns="2"><TextBox Text="{Binding ForwardRegionStart}" Margin="0,4,8,8" /><TextBox Text="{Binding ForwardRegionLength}" Margin="0,4,0,8" /></UniformGrid>
+     <TextBlock Text="Reverse 搜索区域 · 起点 / 长度" /><UniformGrid Columns="2"><TextBox Text="{Binding ReverseRegionStart}" Margin="0,4,8,8" /><TextBox Text="{Binding ReverseRegionLength}" Margin="0,4,0,8" /></UniformGrid>
+     <TextBlock Text="坐标均按输入序列 1-based；长度 0 表示不限，与目标区域及排除区域共同生效。" Style="{StaticResource Caption}" />
+     <TextBlock Text="变异 3′ 末端窗口（nt）" /><TextBox Text="{Binding VariantTerminalBases}" />
+     <TextBlock Text="评分权重覆盖（JSON）" /><TextBox Text="{Binding ScoreWeightsText}" ToolTip='例如 {"Tm":10,"ΔTm":10,"转录本特异性":30}；其他指标使用默认权重。' />
+     <TextBlock Text="参数随项目和预设保存，放宽条件会生成独立的新任务。" Style="{StaticResource Caption}" Margin="0,8,0,0" />
+    </StackPanel></Border>
+   </Grid>
+  </StackPanel>
+ </ScrollViewer>
+</UserControl>

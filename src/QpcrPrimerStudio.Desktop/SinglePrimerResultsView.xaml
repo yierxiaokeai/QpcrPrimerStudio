@@ -1,0 +1,25 @@
+<UserControl x:Class="QpcrPrimerStudio.Desktop.SinglePrimerResultsView"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+ <Grid Margin="0,6,0,0">
+  <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+  <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+   <ComboBox ItemsSource="{Binding SinglePrimerSearches}" SelectedItem="{Binding SelectedSingleSearch}" Margin="0,0,8,6" />
+   <Button Grid.Column="1" Content="载入并寻找配对" Command="{Binding UseSinglePrimerCommand}" />
+  </Grid>
+  <DataGrid Grid.Row="1" ItemsSource="{Binding SinglePrimers}" SelectedItem="{Binding SelectedSinglePrimer}" IsReadOnly="True">
+   <DataGrid.Columns>
+    <DataGridTextColumn Header="序列 5′→3′" Binding="{Binding Sequence}" Width="*" MinWidth="210" />
+    <DataGridTextColumn Header="起点" Binding="{Binding Start}" /><DataGridTextColumn Header="终点" Binding="{Binding End}" />
+    <DataGridTextColumn Header="长度 nt" Binding="{Binding Sequence.Length}" />
+    <DataGridTextColumn Header="Tm °C" Binding="{Binding Tm, StringFormat=F2}" />
+    <DataGridTextColumn Header="GC%" Binding="{Binding Gc, StringFormat=F1}" />
+    <DataGridTextColumn Header="发卡 Tm" Binding="{Binding HairpinTm, StringFormat=F2}" />
+    <DataGridTextColumn Header="自二聚体 END" Binding="{Binding SelfEndTm, StringFormat=F2}" />
+   </DataGrid.Columns>
+  </DataGrid>
+  <Expander Grid.Row="2" Header="搜索证据与发卡结构" Margin="0,4,0,0"><Grid MaxHeight="130"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+   <TextBox Text="{Binding SingleSearchLog}" IsReadOnly="True" FontFamily="Consolas" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" />
+   <TextBox Grid.Column="1" Text="{Binding SelectedSinglePrimer.HairpinStructure}" IsReadOnly="True" FontFamily="Consolas" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" />
+  </Grid></Expander>
+ </Grid>
+</UserControl>

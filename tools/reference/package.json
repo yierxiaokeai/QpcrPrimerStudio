@@ -1,0 +1,6 @@
+{
+  "name": "qpcr-reference-importer",
+  "private": true,
+  "type": "module",
+  "dependencies": { "@gmod/gff": "2.1.0", "@gmod/vcf": "7.2.0" }
+}

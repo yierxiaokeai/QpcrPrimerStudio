@@ -1,0 +1,19 @@
+<Window x:Class="QpcrPrimerStudio.Desktop.SmartExportDialog"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+ Title="智能导出预览" Width="940" Height="620" MinWidth="660" MinHeight="430" WindowStyle="None" ResizeMode="CanResize"
+ WindowStartupLocation="CenterOwner" ShowInTaskbar="False" Background="{DynamicResource CardBrush}">
+ <Border BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="18">
+  <Grid><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+   <Grid Margin="0,0,0,10"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBlock Text="智能导出 · 每个基因一对" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" /><Button x:Name="CloseDialogButton" Grid.Column="1" Content="关闭" IsCancel="True" shell:WindowChrome.IsHitTestVisibleInChrome="True" /></Grid>
+   <StackPanel Grid.Row="1" Margin="0,0,0,8"><TextBlock x:Name="ExportSummary" TextWrapping="Wrap" FontWeight="SemiBold" /><TextBlock x:Name="ExportRules" TextWrapping="Wrap" Style="{StaticResource Caption}" Margin="0,6,0,0" /><TextBlock Text="保留所有原始候选和手动勾选状态。Excel 附完整筛选记录；CSV 同时生成智能导出记录表。特异性和实验验证状态请核对质量证据。" TextWrapping="Wrap" Style="{StaticResource Caption}" Margin="0,6,0,0" /></StackPanel>
+   <TabControl Grid.Row="2" BorderThickness="0">
+    <TabItem Header="选出的引物"><DataGrid x:Name="SmartChoicesGrid" IsReadOnly="True" CanUserAddRows="False" AutoGenerateColumns="False"><DataGrid.Columns>
+     <DataGridTextColumn Header="基因" Binding="{Binding Gene}" Width="*" /><DataGridTextColumn Header="靶标" Binding="{Binding Target}" Width="*" /><DataGridTextColumn Header="评分" Binding="{Binding Score, StringFormat=F1}" /><DataGridTextColumn Header="#" Binding="{Binding Rank}" /><DataGridTextColumn Header="Forward 5′→3′" Binding="{Binding Forward5to3}" Width="2*" /><DataGridTextColumn Header="Reverse 5′→3′" Binding="{Binding Reverse5to3}" Width="2*" /><DataGridTextColumn Header="产物 bp" Binding="{Binding ProductBp}" />
+    </DataGrid.Columns></DataGrid></TabItem>
+    <TabItem Header="未导出的基因"><DataGrid x:Name="SmartMissingGrid" IsReadOnly="True" CanUserAddRows="False" AutoGenerateColumns="False"><DataGrid.Columns><DataGridTextColumn Header="基因" Binding="{Binding Gene}" Width="180" /><DataGridTextColumn Header="原因" Binding="{Binding Reason}" Width="*"><DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /></Style></DataGridTextColumn.ElementStyle></DataGridTextColumn></DataGrid.Columns></DataGrid></TabItem>
+    <TabItem Header="各靶标筛选记录"><DataGrid x:Name="SmartTargetsGrid" IsReadOnly="True" CanUserAddRows="False" AutoGenerateColumns="False"><DataGrid.Columns><DataGridTextColumn Header="基因" Binding="{Binding Gene}" /><DataGridTextColumn Header="靶标" Binding="{Binding Target}" /><DataGridTextColumn Header="原候选" Binding="{Binding Candidates}" /><DataGridTextColumn Header="质量排除" Binding="{Binding QualityExcluded}" /><DataGridTextColumn Header="无有效评分" Binding="{Binding Unscored}" /><DataGridTextColumn Header="发卡排除" Binding="{Binding HairpinExcluded}" /><DataGridTextColumn Header="保留" Binding="{Binding Retained}" /><DataGridTextColumn Header="说明" Binding="{Binding Reason}" Width="*" /></DataGrid.Columns></DataGrid></TabItem>
+   </TabControl>
+   <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0"><Button Content="取消" IsCancel="True" /><Button x:Name="ExportSmartButton" Content="导出 Excel / CSV…" IsDefault="True" Style="{StaticResource Primary}" Click="ConfirmExport" /></StackPanel>
+  </Grid>
+ </Border>
+</Window>
