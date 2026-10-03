@@ -43,14 +43,16 @@ internal static class SmartExportChecks
         }
         var rejection = Pair("rejected", target.Id, 1, 100); rejection.Assessment.Rejections.Add("fixture quality rejection");
         var latest = Run(target, Pair("risky-top", target.Id, 1, 99, true), Pair("tie-second", target.Id, 2, 90),
-            Pair("tie-first", target.Id, 1, 90), Pair("lower", target.Id, 1, 80), rejection, Pair("unknown", target.Id, 1, null));
+            Pair("tie-first", target.Id, 1, 90), Pair("lower", target.Id, 1, 80), rejection, Pair("unknown", target.Id, 1, null),
+            Pair("ambiguous-top", target.Id, 1, 100, ambiguous: true));
         var source = new ProjectDocument { Parameters = parameters, Targets = [target], Runs = [Run(target, Pair("old-top", target.Id, 1, 100)), latest] };
         var before = Identity(source);
         var engine = new SmartExportEngine(Path.Combine(Path.GetDirectoryName(primer3)!, "ntthal.exe"));
         var plan = await engine.PrepareAsync(source, new(), default);
         var chosen = SmartExportEngine.Candidate(plan.Project, plan.Choices.Single());
         Check(chosen.Id == "tie-first", "Smart selection removes risky/quality-rejected/unscored pairs and resolves score ties by original rank");
-        Check(plan.Choices[0].RunIndex == 1 && plan.Report.Targets[0].HairpinExcluded == 1 && plan.Report.Targets[0].QualityExcluded == 1 && plan.Report.Targets[0].Unscored == 1,
+        Check(plan.Choices[0].RunIndex == 1 && plan.Report.Targets[0].HairpinExcluded == 1 && plan.Report.Targets[0].QualityExcluded == 1 && plan.Report.Targets[0].Unscored == 1 &&
+            plan.Report.Targets[0].MismatchExcluded == 1 && plan.Report.Targets[0].Reason.Contains("歧义碱基"),
             "Smart selection uses the latest matching run and records each exclusion category");
         Check(Identity(source) == before && source.Runs[1].HairpinScreening is null && source.Runs[1].Candidates[1].Selected,
             "Preparing smart export does not mutate source data or manual selections");
@@ -87,8 +89,8 @@ internal static class SmartExportChecks
             "Changed templates and never-designed genes have explicit missing-result reasons");
         Check(multiPlan.Report.Genes.Single(g => g.Gene == "risky").Reason.Contains("全部触发") && multiPlan.Report.Genes.Single(g => g.Gene == "unscored").Reason.Contains("未评分"),
             "All-risky and unscored genes are reported without exporting a substitute");
-        Check(multiPlan.Report.Genes.Single(g => g.Gene == "invalid").Reason.Contains("发卡核对失败") && Identity(multi) == multiBefore,
-            "A local hairpin computation failure remains explicit and other genes can still export without changing the source");
+        Check(multiPlan.Report.Genes.Single(g => g.Gene == "invalid").Reason.Contains("歧义碱基") && Identity(multi) == multiBefore,
+            "An ambiguous binding site is excluded explicitly and other genes export without changing the source");
         using var cancel = new CancellationTokenSource(); cancel.Cancel(); var cancelled = false;
         try { await engine.PrepareAsync(multi, new(), cancel.Token); } catch (OperationCanceledException) { cancelled = true; }
         Check(cancelled && Identity(multi) == multiBefore, "Cancelled intelligent export cannot apply partial source changes");
@@ -116,7 +118,7 @@ internal static class SmartExportChecks
             Check(rows.Count == 2 && rows.Select(r => r.Gene).SequenceEqual(["geneA", "geneB"]) && rows[0].Rank == 7,
                 "CSV contains the highest score per gene rather than the smallest original rank or checked-only rows");
         }
-        Check(excelReceipt.Count == 1 && csvReceipt.Count == 2 && File.ReadAllText(csvReceipt[1]).Contains("发卡核对失败") && File.ReadAllText(csvReceipt[1]).Contains("GCGCGCAAAAAAGCGCGC"),
+        Check(excelReceipt.Count == 1 && csvReceipt.Count == 2 && File.ReadAllText(csvReceipt[1]).Contains("歧义碱基") && File.ReadAllText(csvReceipt[1]).Contains("GCGCGCAAAAAAGCGCGC"),
             "CSV export delivers a companion record including unavailable genes and serialized hairpin evidence");
         var oldBytes = File.ReadAllBytes(csvPath);
         using (var locked = new FileStream(csvReceipt[1], FileMode.Open, FileAccess.ReadWrite, FileShare.None))

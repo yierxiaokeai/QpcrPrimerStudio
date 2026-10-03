@@ -91,7 +91,10 @@ public static partial class ResultExporter
                 audit.Cell(4, 1).InsertTable(smart.Genes);
                 audit.SheetView.FreezeRows(4); audit.Columns().AdjustToContents(8, 80);
                 var targets = workbook.AddWorksheet("Smart Target Audit");
-                targets.Cell(1, 1).InsertTable(smart.Targets); targets.Columns().AdjustToContents(8, 80);
+                targets.Cell(1, 1).InsertTable(smart.Targets.Select(t => new { t.Gene, t.Target, t.RunIndex,
+                    t.Candidates, t.QualityExcluded, t.Unscored, t.MismatchExcluded,
+                    MismatchReasons = string.Join("；", t.MismatchReasons), t.HairpinExcluded, t.Retained, t.Reason }));
+                targets.Columns().AdjustToContents(8, 80);
             }
             workbook.SaveAs(path);
         }

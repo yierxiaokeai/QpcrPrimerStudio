@@ -49,6 +49,7 @@ internal static class Program
         passed += await HairpinScreeningChecks.RunAsync(root, work, target, run, executable);
         passed += await ParameterRecommendationChecks.RunAsync(root, work, target, run, executable);
         passed += await SmartExportChecks.RunAsync(root, work, target, run, executable);
+        passed += await SmartBindingChecks.RunAsync(root, work, target, run);
         var thermo = await new Thermodynamics(Path.Combine(Path.GetDirectoryName(executable)!, "ntthal.exe"))
             .AnalyzeAsync(candidate.Forward.Sequence, candidate.Reverse.Sequence, parameters, CancellationToken.None);
         Assert(thermo.Contains("3′ 异二聚体") && thermo.Contains("dG"), "Real structure and thermodynamic outputs");
@@ -379,6 +380,12 @@ internal static class Program
                 $"Simple mode keeps the score fixed and focuses the workspace at {size}");
             var scoreText = VisualChildren<System.Windows.Controls.TextBlock>(workspace).Single(t => t.Name == "SelectedScoreText");
             Assert(scoreText.IsVisible && scoreText.Text.StartsWith("选中评分"), $"Selected score is visible in simple mode at {size}");
+            var exportActions = VisualChildren<System.Windows.Controls.StackPanel>(workspace).Single(t => t.Name == "ExportActions");
+            var selectedOnly = VisualChildren<System.Windows.Controls.CheckBox>(exportActions).Single();
+            var smartExport = VisualChildren<System.Windows.Controls.Button>(exportActions).Single();
+            Assert(exportActions.Orientation == System.Windows.Controls.Orientation.Horizontal && selectedOnly.IsVisible && smartExport.IsVisible &&
+                smartExport.TranslatePoint(new Point(), exportActions).X >= selectedOnly.ActualWidth,
+                $"Smart export stays beside checked-only export on a single row at {size}");
             var horizontal = VisualChildren<System.Windows.Controls.ScrollViewer>(simpleGrid).First();
             horizontal.ScrollToRightEnd(); window.UpdateLayout();
             Assert(VisualChildren<System.Windows.Controls.DataGridCell>(simpleGrid)

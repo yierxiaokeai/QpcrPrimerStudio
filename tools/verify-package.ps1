@@ -22,6 +22,7 @@ try {
     }
     $result = Get-Content -LiteralPath $report -Raw -Encoding UTF8 | ConvertFrom-Json
     if (!$result.IndependentReauditRepairs) { throw 'Independent re-audit package verification failed.' }
+    if (!$result.SmartBindingFilters) { throw 'Smart-export binding filter verification failed.' }
     if (!$result.Success -or !$result.Icon -or !$result.Window -or !$result.SQLite -or !$result.Thermodynamics -or !$result.RuntimeBundled -or !$result.SelectionAutoSave -or !$result.FastaImport -or !$result.GenBankImport -or !$result.ParameterRecommendation -or !$result.ProjectParameterSharing -or !$result.SmartExport -or !$result.TargetNavigation -or !$result.CheckedOnlyDefault -or !$result.AuditRepairs) { throw 'Package verification failed.' }
     Write-Output "Standalone package verified: $report"
 } finally {

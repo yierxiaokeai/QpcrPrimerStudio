@@ -20,7 +20,8 @@ public static partial class ResultExporter
             var run = plan.Project.Runs[choice.RunIndex]; var c = SmartExportEngine.Candidate(plan.Project, choice);
             var target = plan.Project.Targets.Single(t => t.Id == run.Target.Id && t.Sha256 == run.Target.Sha256);
             if (!c.Assessment.Accepted || !SmartExportEngine.IsScored(c) || run.HairpinScreening?.DecisionFor(c)?.Excluded != false ||
-                choice.Gene != SmartExportEngine.GeneFor(target, plan.Project.Reference))
+                choice.Gene != SmartExportEngine.GeneFor(target, plan.Project.Reference) ||
+                SmartBindingScreen.Rejections(c, run.Target, plan.Project.Databases).Count > 0)
                 throw new InvalidDataException("智能导出的候选与筛选证据不一致，请重新准备。");
             return Row(run, c) with { Gene = choice.Gene };
         }).ToList();

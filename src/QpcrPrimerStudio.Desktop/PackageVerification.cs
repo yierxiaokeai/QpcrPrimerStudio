@@ -64,6 +64,18 @@ internal static class PackageVerification
             .Concat(ResultExporter.ExportSmart(Path.Combine(folder, "portable-smart.csv"), smart)).ToList();
         if (smartFiles.Count != 3 || smartFiles.Any(p => new FileInfo(p).Length == 0))
             throw new InvalidOperationException("Bundled intelligent export writing failed.");
+        var uncheckedProject = vm.Snapshot();
+        uncheckedProject.Databases = [new("unchecked", "转录本", "unchecked", "unchecked", "unchecked", 1, DateTimeOffset.Now, "fixture")];
+        var uncheckedPlan = await new SmartExportEngine(Path.Combine(Path.GetDirectoryName(paths.Primer3)!, "ntthal.exe"))
+            .PrepareAsync(uncheckedProject, new(), default);
+        if (uncheckedPlan.Choices.Count != 0 || uncheckedPlan.Report.Targets.Sum(t => t.MismatchExcluded) == 0)
+            throw new InvalidOperationException("Bundled intelligent export accepted an unchecked bound database.");
+        var mismatchCandidate = JsonSerializer.Deserialize<PrimerCandidate>(JsonSerializer.Serialize(run.Candidates[0], ProjectStore.JsonOptions), ProjectStore.JsonOptions)!;
+        var mismatchSequence = mismatchCandidate.Forward.Sequence.ToCharArray();
+        mismatchSequence[^1] = mismatchSequence[^1] == 'A' ? 'C' : 'A';
+        mismatchCandidate.Forward = mismatchCandidate.Forward with { Sequence = new string(mismatchSequence) };
+        if (!SmartBindingScreen.Rejections(mismatchCandidate, run.Target, []).Any(r => r.Contains("F 与目标模板错配")))
+            throw new InvalidOperationException("Bundled intelligent export did not reject a template binding mismatch.");
         if (!await vm.AutoSaveSelectionAsync(vm.Candidates[0], true)) throw new InvalidOperationException("Bundled selection autosave failed.");
         var recovered = new MainViewModel(storage: Path.Combine(folder, "profile"));
         if (!await recovered.RecoverLastAutoSaveAsync() || !recovered.Candidates[0].Selected)
@@ -92,7 +104,7 @@ internal static class PackageVerification
             Window = true, Icon = true, Frame = frame, DialogClose = new[] { searchClose, advancedSearchClose, hairpinClose, smartClose, backupClose },
             SelectionAutoSave = true, FastaImport = true, GenBankImport = true,
             ParameterRecommendation = true, ProjectParameterSharing = true,
-            SmartExport = true, TargetNavigation = true, CheckedOnlyDefault = true,
+            SmartExport = true, SmartBindingFilters = true, TargetNavigation = true, CheckedOnlyDefault = true,
             AuditRepairs = true,
             IndependentReauditRepairs = true,
             RuntimeBundled = File.Exists(Path.Combine(AppContext.BaseDirectory, "System.Private.CoreLib.dll")) && File.Exists(Path.Combine(AppContext.BaseDirectory, "PresentationFramework.dll")),

@@ -6,14 +6,18 @@ public sealed record SmartExportChoice(string Gene, int RunIndex, int CandidateI
 public sealed record SmartGeneResult(string Gene, string Target, string CandidateId, int? Rank, double? Score,
     string Forward5to3, string Reverse5to3, int? ProductBp, string Status, string Reason);
 public sealed record SmartTargetResult(string Gene, string Target, int? RunIndex, int Candidates, int QualityExcluded,
-    int Unscored, int HairpinExcluded, int Retained, string Reason);
+    int Unscored, int HairpinExcluded, int Retained, string Reason)
+{
+    public int MismatchExcluded { get; init; }
+    public List<string> MismatchReasons { get; init; } = [];
+}
 public sealed class SmartExportReport
 {
     public DateTimeOffset PreparedAt { get; set; } = DateTimeOffset.Now;
     public string SourceFingerprint { get; set; } = "";
     public string HairpinEngineSha256 { get; set; } = "";
     public HairpinScreenSettings Settings { get; set; } = new();
-    public string RankingRule { get; set; } = "排除质量规则拒绝项、未评分项及高风险发卡后，按综合评分降序；同分按原始排名、Primer3 penalty、靶标 ID、候选 ID 升序。";
+    public string RankingRule { get; set; } = "排除质量拒绝、未评分、目标结合错配/插缺或未核对及高风险发卡后，按综合评分降序；已绑定数据库须完成检查，每个预期靶标须有零错配且无插缺的完整 F/R 产物。未绑定数据库时仅确认模板结合；同分按原始排名、Primer3 penalty、靶标 ID、候选 ID 升序。";
     public List<SmartGeneResult> Genes { get; set; } = [];
     public List<SmartTargetResult> Targets { get; set; } = [];
 }
@@ -74,14 +78,19 @@ public sealed class SmartExportEngine(string ntthal)
                 }
                 var rejected = run.Candidates.Count(c => !c.Assessment.Accepted);
                 var unscored = run.Candidates.Count(c => c.Assessment.Accepted && !IsScored(c));
-                var eligible = run.Candidates.Where(c => c.Assessment.Accepted && IsScored(c)).ToList();
+                var scored = run.Candidates.Where(c => c.Assessment.Accepted && IsScored(c)).ToList();
+                var bindings = scored.Select(c => (Candidate: c, Reasons: SmartBindingScreen.Rejections(c, run.Target, project.Databases))).ToList();
+                var mismatchExcluded = bindings.Count(b => b.Reasons.Count > 0);
+                var mismatchReasons = bindings.Where(b => b.Reasons.Count > 0)
+                    .Select(b => $"候选 #{b.Candidate.Rank}（{b.Candidate.Id}）：" + string.Join("；", b.Reasons)).ToList();
+                var eligible = bindings.Where(b => b.Reasons.Count == 0).Select(b => b.Candidate).ToList();
                 if (run.State is "失败" or "取消" || run.Candidates.Count == 0)
                     record = new(gene, target.Id, runIndex, run.Candidates.Count, rejected, unscored, 0, 0,
                         $"最近任务：{run.State}。{run.Message}");
                 else if (eligible.Count == 0)
                     record = new(gene, target.Id, runIndex, run.Candidates.Count, rejected, unscored, 0, 0,
-                        $"没有可用评分的合格候选：质量规则排除 {rejected} 对，未评分或评分无效 {unscored} 对。" +
-                        string.Join("；", invalidations.Distinct(StringComparer.Ordinal)));
+                        $"没有可用评分的合格候选：质量规则排除 {rejected} 对，未评分或评分无效 {unscored} 对，错配/插缺或未核对排除 {mismatchExcluded} 对。" +
+                        string.Join("；", invalidations.Distinct(StringComparer.Ordinal).Concat(mismatchReasons)));
                 else
                 {
                     try
@@ -108,6 +117,9 @@ public sealed class SmartExportEngine(string ntthal)
                             "发卡核对失败，本靶标未参与导出：" + ex.Message);
                     }
                 }
+                record = record with { MismatchExcluded = mismatchExcluded, MismatchReasons = mismatchReasons,
+                    Reason = record.Reason + (eligible.Count > 0 && mismatchExcluded > 0
+                        ? $"错配/插缺或未核对排除 {mismatchExcluded} 对：" + string.Join("；", mismatchReasons) : "") };
             }
             records.Add(record); report.Targets.Add(record);
         }
@@ -125,7 +137,9 @@ public sealed class SmartExportEngine(string ntthal)
             {
                 choices.Add(best); var c = Candidate(project, best);
                 report.Genes.Add(new(gene, c.TargetId, c.Id, c.Rank, c.Assessment.Score, c.Forward.Sequence,
-                    c.Reverse.Sequence, c.ProductLength, "已选出", "最高综合评分；特异性与实验验证状态见质量证据。"));
+                    c.Reverse.Sequence, c.ProductLength, "已选出", "最高综合评分；目标模板已确认零错配。" +
+                    (c.Specificity.Any(r => r.Kind == "转录本") ? "预期转录本结合已核对。" : "转录本数据库未检查。") +
+                    "特异性与实验验证状态见质量证据。"));
             }
         }
         token.ThrowIfCancellationRequested();
