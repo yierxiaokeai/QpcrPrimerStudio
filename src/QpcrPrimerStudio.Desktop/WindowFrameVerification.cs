@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Automation.Peers;
 using System.Windows.Automation.Provider;
 using System.Windows.Shell;
+using System.Windows.Threading;
 
 namespace QpcrPrimerStudio.Desktop;
 
@@ -91,12 +92,28 @@ public static class WindowFrameVerification
         if ((bounds.Right - bounds.Left) <= (restoredBounds.Right - restoredBounds.Left) &&
             (bounds.Bottom - bounds.Top) <= (restoredBounds.Bottom - restoredBounds.Top))
             throw new InvalidOperationException("Restore did not reduce the maximized window size.");
-        Invoke(close);
-        window.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
-        if (window.IsVisible) throw new InvalidOperationException("Close button did not close the verification window.");
+        CheckCloseAction(window, close);
         return new { CustomTitleBar = true, DragHitTest = dragHit, CloseHitTest = closeHit,
             MinimizeHitTest = minimizeHit, MinimizeAction = true, MaximizeAction = true, MaximizeRestoreAction = true, RestoreAction = true, CloseAction = true,
             MaximizedWithinWorkArea = true, RestoreRecoversSize = true, AcrylicEnabled = acrylic, NeutralFrameEnabled = neutral, OpaqueHeader = opaqueHeader };
+    }
+
+    private static void CheckCloseAction(Window window, Button button)
+    {
+        var frame = new DispatcherFrame();
+        var closed = false;
+        void OnClosed(object? sender, EventArgs e) { closed = true; frame.Continue = false; }
+        var limit = new DispatcherTimer(DispatcherPriority.Normal, window.Dispatcher) { Interval = TimeSpan.FromSeconds(5) };
+        limit.Tick += (_, _) => frame.Continue = false;
+        window.Closed += OnClosed;
+        try
+        {
+            limit.Start();
+            Invoke(button);
+            if (!closed) Dispatcher.PushFrame(frame);
+            if (!closed || window.IsVisible) throw new InvalidOperationException("The close button did not close the verification window within five seconds.");
+        }
+        finally { limit.Stop(); window.Closed -= OnClosed; }
     }
 
     private static void Invoke(Button button)

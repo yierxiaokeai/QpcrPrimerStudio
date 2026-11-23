@@ -19,7 +19,7 @@ public static partial class ResultExporter
         {
             var run = plan.Project.Runs[choice.RunIndex]; var c = SmartExportEngine.Candidate(plan.Project, choice);
             var target = plan.Project.Targets.Single(t => t.Id == run.Target.Id && t.Sha256 == run.Target.Sha256);
-            if (!c.Assessment.Accepted || !SmartExportEngine.IsScored(c) || run.HairpinScreening?.DecisionFor(c)?.Excluded != false ||
+            if (!c.Assessment.Accepted || !SmartExportEngine.IsScored(c) || run.SmartExportScreening?.DecisionFor(c)?.Excluded != false ||
                 choice.Gene != SmartExportEngine.GeneFor(target, plan.Project.Reference) ||
                 SmartBindingScreen.Rejections(c, run.Target, plan.Project.Databases).Count > 0)
                 throw new InvalidDataException("智能导出的候选与筛选证据不一致，请重新准备。");
@@ -39,12 +39,12 @@ public static partial class ResultExporter
                 { InjectionOptions = CsvHelper.Configuration.InjectionOptions.Escape, InjectionEscapeCharacter = '\'' });
             csv.WriteRecords(plan.Report.Genes.Select(g => new
             {
-                g.Gene, g.Status, g.Target, g.CandidateId, g.Score, g.Rank, g.Reason, plan.Report.PreparedAt,
+                g.Gene, g.Status, g.Target, g.CandidateId, g.Score, g.Rank, g.Reason, g.TranscriptBinding, plan.Report.PreparedAt,
                 plan.Report.RankingRule, plan.Report.SourceFingerprint, plan.Report.HairpinEngineSha256,
                 Thresholds = JsonSerializer.Serialize(plan.Report.Settings, ProjectStore.JsonOptions),
                 TargetAudit = JsonSerializer.Serialize(plan.Report.Targets.Where(t => t.Gene == g.Gene), ProjectStore.JsonOptions),
                 HairpinEvidence = JsonSerializer.Serialize(plan.Report.Targets.Where(t => t.Gene == g.Gene && t.RunIndex is not null)
-                    .Select(t => new { t.Target, Screening = plan.Project.Runs[t.RunIndex!.Value].HairpinScreening }), ProjectStore.JsonOptions)
+                    .Select(t => new { t.Target, Screening = plan.Project.Runs[t.RunIndex!.Value].SmartExportScreening }), ProjectStore.JsonOptions)
             }));
         }
         // Stage all files before replacing any destination. Keep recoverable backups on success and failure.

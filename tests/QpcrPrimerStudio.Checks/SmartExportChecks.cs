@@ -56,19 +56,56 @@ internal static class SmartExportChecks
             "Smart selection uses the latest matching run and records each exclusion category");
         Check(Identity(source) == before && source.Runs[1].HairpinScreening is null && source.Runs[1].Candidates[1].Selected,
             "Preparing smart export does not mutate source data or manual selections");
-        Check(plan.Project.Runs[1].HairpinScreening!.Decisions.Count == 4 && plan.Report.HairpinEngineSha256.Length == 64,
+        Check(plan.Project.Runs[1].SmartExportScreening!.Decisions.Count == 4 && plan.Project.Runs[1].HairpinScreening is null && plan.Report.HairpinEngineSha256.Length == 64,
             "Smart screening preserves actual thermodynamic evidence and engine identity");
-        var cachedTime = plan.Project.Runs[1].HairpinScreening!.AnalyzedAt;
+        var cachedTime = plan.Project.Runs[1].SmartExportScreening!.AnalyzedAt;
         var reused = await engine.PrepareAsync(plan.Project, new(), default);
-        Check(reused.Project.Runs[1].HairpinScreening!.AnalyzedAt == cachedTime, "Unchanged trustworthy hairpin evidence is reused");
+        Check(reused.Project.Runs[1].SmartExportScreening!.AnalyzedAt == cachedTime, "Unchanged trustworthy hairpin evidence is reused");
         plan.Project.Runs[1].Candidates[2].Provenance = null;
         plan.Project.Runs[1].UsedParameters = parameters with { MagnesiumMm = 0 };
         var changed = await engine.PrepareAsync(plan.Project, new(), default);
-        Check(changed.Project.Runs[1].HairpinScreening!.DecisionFor(changed.Project.Runs[1].Candidates[2])!.Forward.Conditions.MagnesiumMm == 0,
+        Check(changed.Project.Runs[1].SmartExportScreening!.DecisionFor(changed.Project.Runs[1].Candidates[2])!.Forward.Conditions.MagnesiumMm == 0,
             "Changed fallback reaction conditions invalidate cached hairpin evidence even without candidate provenance");
         var freshSettings = await engine.PrepareAsync(source, new(85), default);
-        Check(freshSettings.Report.Settings.AnnealingC == 85 && freshSettings.Project.Runs[1].HairpinScreening!.Settings.AnnealingC == 85,
+        Check(freshSettings.Report.Settings.AnnealingC == 85 && freshSettings.Project.Runs[1].SmartExportScreening!.Settings.AnnealingC == 85,
             "Configured annealing thresholds are applied throughout intelligent export");
+
+        var manualSource = Copy(source);
+        var manualRun = manualSource.Runs[^1];
+        manualRun.Candidates.RemoveAll(c => c.Id == "ambiguous-top");
+        var manuallyExcluded = manualRun.Candidates.Single(c => c.Id == "risky-top");
+        manuallyExcluded.Assessment.Score = null; manuallyExcluded.Selected = true;
+        var hp = new HairpinScreeningEngine(Path.Combine(Path.GetDirectoryName(primer3)!, "ntthal.exe"));
+        manualRun.HairpinScreening = await hp.ScreenAsync(manualRun.Candidates, parameters, new(), default);
+        var matching = await engine.PrepareAsync(manualSource, new(), default);
+        var evidenceRun = matching.Project.Runs[^1];
+        Check(evidenceRun.HairpinScreening!.DecisionFor(manuallyExcluded)?.Excluded == true &&
+            evidenceRun.SmartExportScreening!.DecisionFor(manuallyExcluded) is null &&
+            evidenceRun.SmartExportScreening.AnalyzedAt == manualRun.HairpinScreening.AnalyzedAt,
+            "Smart selection reuses matching physical evidence without trimming manual exclusions on ineligible candidates");
+        var separate = await engine.PrepareAsync(manualSource, new(85), default);
+        foreach (var smart in new[] { false, true })
+        {
+            var file = Path.Combine(work, smart ? "independent-smart.xlsx" : "independent-manual.xlsx");
+            if (smart) ResultExporter.ExportSmart(file, separate); else ResultExporter.Export(file, separate.Project, true);
+            using var book = new XLWorkbook(file);
+            var sheet = book.Worksheet("Hairpin Screening");
+            var tempColumn = sheet.Row(1).CellsUsed().Single(c => c.GetString() == "AnnealingC").Address.ColumnNumber;
+            Check(sheet.RowsUsed().Skip(1).All(r => r.Cell(tempColumn).GetDouble() == (smart ? 85 : 60)),
+                smart ? "Smart workbook exports only evidence from the smart settings" : "Ordinary workbook keeps the applied manual screening evidence");
+        }
+        var noSelections = Copy(source); foreach (var c in noSelections.Runs.SelectMany(r => r.Candidates)) c.Selected = false;
+        var profileChecks = Path.Combine(work, "empty-ordinary");
+        var noRows = new MainViewModel(Path.Combine(root, "src/QpcrPrimerStudio.Desktop/bin/Debug/net10.0-windows/tools"), profileChecks);
+        noRows.Restore(noSelections); noRows.ExportCommand.Execute(null);
+        Check(noRows.Status.Contains("尚未勾选") && noRows.Status.Contains("候选表"), "Empty checked-only export gives the next action without opening a file picker");
+        var excludedOnly = manualRun.Candidates.Where(c => c.Id == manuallyExcluded.Id).ToList();
+        Check(ResultExporter.DescribeOrdinaryExport([new TargetRun { Target = target, Candidates = excludedOnly, HairpinScreening = manualRun.HairpinScreening }], true)
+            .EmptyReason?.Contains("均已被发卡筛选排除") == true, "An empty manual selection distinguishes screened-out pairs from no checks");
+        Directory.CreateDirectory(Path.Combine(profileChecks, "errors.log"));
+        noRows.TemplateText = "invalid!"; noRows.ApplyTemplateCommand.Execute(null);
+        Check(noRows.Status.Contains("无效字符") && noRows.LogText.Contains("无法写入错误日志"),
+            "An unavailable diagnostic log does not hide the input error or crash the workbench");
 
         var t2 = target with { Id = "geneA.t2" }; var b = target with { Id = "geneB", GeneId = "" };
         var failed = target with { Id = "failed", GeneId = "" }; var updated = target with { Id = "updated", GeneId = "", Sequence = target.Sequence + "A" };

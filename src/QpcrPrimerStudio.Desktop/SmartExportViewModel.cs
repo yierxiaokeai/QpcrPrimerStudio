@@ -34,22 +34,20 @@ public partial class MainViewModel
         await Busy(async token =>
         {
             await FlushSelectionSavesAsync();
-            if (SelectedTarget is { } target && (TargetName.Trim() != target.Id || NormalizeTemplate() != target.Sequence ||
-                !SameInputIds(ExpectedText, target.ExpectedSubjects) || !SameInputIds(CoverageText, CoverageFor(target)) ||
-                !JunctionText.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(Int).ToHashSet().SetEquals(target.Junctions)))
-                throw new InvalidOperationException("当前目标序列或预期 ID、覆盖 ID、连接位点尚未保存，请先保存目标信息并重新设计该基因。");
+            RequireSavedTargetInputs(includeSelected: true);
             var source = Snapshot();
             var plan = await new SmartExportEngine(Path.Combine(Path.GetDirectoryName(paths.Primer3)!, "ntthal.exe"))
                 .PrepareAsync(source, HairpinSettings, token, (done, total, id) =>
                 {
-                    Progress = done * 100d / total; Status = $"智能导出：发卡核对 {done}/{total} · {id}";
+                    Progress = done * 100d / total; Status = $"智能导出：核对候选 {done}/{total} · {id}";
                 });
             token.ThrowIfCancellationRequested();
+            RequireSavedTargetInputs(includeSelected: true);
             if (SmartExportEngine.DesignFingerprint(Snapshot()) != plan.Report.SourceFingerprint)
                 throw new InvalidOperationException("筛选期间设计数据发生变化，本次预览未应用，请重新准备。");
             foreach (var index in plan.Report.Targets.Where(t => t.RunIndex is not null).Select(t => t.RunIndex!.Value).Distinct())
             {
-                Runs[index].HairpinScreening = plan.Project.Runs[index].HairpinScreening;
+                Runs[index].SmartExportScreening = plan.Project.Runs[index].SmartExportScreening;
                 for (var c = 0; c < Runs[index].Candidates.Count; c++)
                     Runs[index].Candidates[c].Assessment = plan.Project.Runs[index].Candidates[c].Assessment;
             }
@@ -59,6 +57,4 @@ public partial class MainViewModel
         });
         return result;
     }
-    private static bool SameInputIds(string text, IEnumerable<string> ids) =>
-        text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet(StringComparer.Ordinal).SetEquals(ids);
 }

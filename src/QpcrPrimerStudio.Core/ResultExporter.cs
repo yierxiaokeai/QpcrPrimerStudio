@@ -7,12 +7,29 @@ namespace QpcrPrimerStudio.Core;
 
 public static partial class ResultExporter
 {
+    public sealed record OrdinaryExportScope(int Pairs, int Targets, string? EmptyReason);
+    private static IEnumerable<(TargetRun Run, PrimerCandidate Candidate)> OrdinaryCandidates(IEnumerable<TargetRun> runs, bool selectedOnly) =>
+        runs.SelectMany(run => run.Candidates.Where(c => (!selectedOnly || c.Selected) &&
+            run.HairpinScreening?.DecisionFor(c)?.Excluded != true).Select(c => (run, c)));
+    private static string NoOrdinaryCandidates(IEnumerable<TargetRun> runs, bool selectedOnly)
+    {
+        if (!runs.Any(r => r.Candidates.Count > 0)) return "暂无设计结果。请先为靶标设计引物。";
+        if (selectedOnly && !runs.Any(r => r.Candidates.Any(c => c.Selected)))
+            return "尚未勾选引物。请在候选表左侧勾选，或取消“仅导出勾选项”以导出全部保留项。";
+        return selectedOnly ? "勾选的引物均已被发卡筛选排除。请勾选其他候选，或查看已排除项。" :
+            "候选均已被发卡筛选排除。请在候选表查看已排除项。";
+    }
+    public static OrdinaryExportScope DescribeOrdinaryExport(IEnumerable<TargetRun> runs, bool selectedOnly)
+    {
+        var targets = new HashSet<string>(StringComparer.Ordinal); var pairs = 0;
+        foreach (var (run, _) in OrdinaryCandidates(runs, selectedOnly)) { targets.Add(run.Target.Id); pairs++; }
+        return new(pairs, targets.Count, pairs == 0 ? NoOrdinaryCandidates(runs, selectedOnly) : null);
+    }
     public static void Export(string path, ProjectDocument project, bool selectedOnly)
     {
         ProjectValidation.Validate(project);
-        var rows = project.Runs.SelectMany(r => r.Candidates.Where(c => r.HairpinScreening?.DecisionFor(c)?.Excluded != true).Select(c => Row(r, c)))
-            .Where(r => !selectedOnly || r.Selected).ToList();
-        if (rows.Count == 0) throw new InvalidOperationException("没有可导出的候选。");
+        var rows = OrdinaryCandidates(project.Runs, selectedOnly).Select(item => Row(item.Run, item.Candidate)).ToList();
+        if (rows.Count == 0) throw new InvalidOperationException(NoOrdinaryCandidates(project.Runs, selectedOnly));
         var absolute = Path.GetFullPath(path);
         var pending = Path.Combine(Path.GetDirectoryName(absolute)!, ".export-" + Guid.NewGuid().ToString("N") + Path.GetExtension(absolute));
         try
@@ -50,14 +67,18 @@ public static partial class ResultExporter
                 Missing = string.Join(",", c.Assessment.MissingTranscripts), Reasons = string.Join(";", c.Assessment.Rejections),
                 Details = c.Assessment.Details, c.Locked, c.Revision, c.ParentCandidateId }).ToList());
             quality.Columns().AdjustToContents(8, 80);
-            var screens = project.Runs.Where(r => r.HairpinScreening is not null).SelectMany(r => r.HairpinScreening!.Decisions.Select(d => new
+            var screenSources = smart is null
+                ? project.Runs.Select(r => (Target: r.Target.Id, Screen: r.HairpinScreening))
+                : smart.Targets.Where(t => t.RunIndex.HasValue).Select(t =>
+                    (Target: t.Target, Screen: project.Runs[t.RunIndex!.Value].SmartExportScreening));
+            var screens = screenSources.Where(s => s.Screen is not null).SelectMany(s => s.Screen!.Decisions.Select(d => new
             {
-                d.CandidateId, Target = r.Target.Id, d.Excluded, Reasons = string.Join(";", d.Reasons),
-                r.HairpinScreening!.Settings.AnnealingC, r.HairpinScreening.Settings.TerminalMarginC, r.HairpinScreening.Settings.TerminalDeltaGKcal,
-                r.HairpinScreening.Settings.CheckTerminalHairpins, DeltaGTemperatureC = r.HairpinScreening.DeltaGTemperatureC,
+                d.CandidateId, s.Target, d.Excluded, Reasons = string.Join(";", d.Reasons),
+                s.Screen!.Settings.AnnealingC, s.Screen.Settings.TerminalMarginC, s.Screen.Settings.TerminalDeltaGKcal,
+                s.Screen.Settings.CheckTerminalHairpins, s.Screen.DeltaGTemperatureC,
                 ForwardTmC = d.Forward.TmC, ReverseTmC = d.Reverse.TmC, ForwardDeltaGKcal = d.Forward.DeltaGKcal, ReverseDeltaGKcal = d.Reverse.DeltaGKcal,
                 ForwardThreePrimePaired = d.Forward.ThreePrimePaired, ReverseThreePrimePaired = d.Reverse.ThreePrimePaired,
-                Conditions = System.Text.Json.JsonSerializer.Serialize(d.Forward.Conditions), r.HairpinScreening.EngineSha256, r.HairpinScreening.AnalyzedAt,
+                Conditions = System.Text.Json.JsonSerializer.Serialize(d.Forward.Conditions), s.Screen.EngineSha256, s.Screen.AnalyzedAt,
                 ForwardEvidence = d.Forward.RawOutput, ReverseEvidence = d.Reverse.RawOutput
             })).ToList();
             if (screens.Count > 0)
@@ -112,7 +133,7 @@ public static partial class ResultExporter
         c.Forward.HairpinTm, c.Reverse.HairpinTm, c.PairAnyTm, c.PairEndTm,
         c.SpecificitySummary, c.JunctionEvidence, c.Notes, run.EngineSha256, c.Amplicon, c.Assessment.Score, c.Assessment.EvidenceCoverage)
         {
-            CandidateId = c.Id, TemplateSha256 = run.Target.Sha256,
+            CandidateId = c.Id, Gene = run.Target.GeneId, TemplateSha256 = run.Target.Sha256,
             Accepted = c.Assessment.Accepted,
             Rejections = string.Join("；", c.Assessment.Rejections),
             Warnings = string.Join("；", c.Assessment.Warnings)

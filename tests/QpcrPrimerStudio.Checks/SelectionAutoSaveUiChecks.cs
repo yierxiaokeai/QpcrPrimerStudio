@@ -80,8 +80,10 @@ internal static class SelectionAutoSaveUiChecks
             heldGate = gate;
             Toggle(box, owner.Dispatcher);
             Check(candidate.Selected && !vm.PendingSelectionSave.IsCompleted, "A checkbox toggle can leave a pending save without blocking the UI thread");
-            window.Close();
-            Check(!closed && window.IsVisible, "Closing the window waits while its latest selection is still queued for disk storage");
+            var closeButton = (Button)window.FindName("CloseButton");
+            ((IInvokeProvider)new ButtonAutomationPeer(closeButton).GetPattern(PatternInterface.Invoke)).Invoke();
+            owner.Dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+            Check(!closed && window.IsVisible, "The title-bar close button waits while the latest selection is still queued for disk storage");
             heldGate.Release(); heldGate = null;
             PumpUntil(() => closed, owner.Dispatcher, "The selection-save window did not close after its queued write finished.");
             Check(vm.PendingSelectionSave.IsCompleted && !vm.HasUnsavedChanges && !window.IsVisible,

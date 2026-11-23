@@ -59,7 +59,8 @@ internal static class PackageVerification
         if (vm.SelectedRun != otherRun || vm.Candidates.Any(c => c.TargetId != other.Id) || vm.TemplateText != other.Sequence || !vm.SelectedOnly)
             throw new InvalidOperationException("Bundled target navigation or checked-only export default failed.");
         var smart = await vm.PrepareSmartExportAsync() ?? throw new InvalidOperationException(vm.Status);
-        if (smart.Choices.Count != 2 || smart.MissingGenes != 0) throw new InvalidOperationException("Bundled intelligent export preparation failed.");
+        if (smart.Choices.Count != 2 || smart.MissingGenes != 0 || vm.Runs.Any(r => r.HairpinScreening is not null || r.SmartExportScreening is null))
+            throw new InvalidOperationException("Bundled intelligent export did not keep smart evidence separate from manual filters.");
         var smartFiles = ResultExporter.ExportSmart(Path.Combine(folder, "portable-smart.xlsx"), smart)
             .Concat(ResultExporter.ExportSmart(Path.Combine(folder, "portable-smart.csv"), smart)).ToList();
         if (smartFiles.Count != 3 || smartFiles.Any(p => new FileInfo(p).Length == 0))
@@ -82,6 +83,10 @@ internal static class PackageVerification
             throw new InvalidOperationException("Bundled selection recovery failed.");
         if (!recovered.UseSharedSearchParameters || recovered.Snapshot().ParameterRecommendations.Count != 1)
             throw new InvalidOperationException("Bundled recommendation project recovery failed.");
+        recovered.TemplateText += "A"; var editedId = recovered.SelectedTarget!.Id;
+        recovered.SelectedTarget = recovered.Targets.First(t => t.Id != editedId);
+        if (await recovered.PrepareSmartExportAsync() is not null || !recovered.Status.Contains(editedId))
+            throw new InvalidOperationException("Bundled smart preview accepted a background template draft.");
         await AuditPackageVerification.CheckAsync(folder, paths, new() { Targets = [target], Runs = [run], Parameters = parameters });
         await ReauditPackageVerification.CheckAsync(folder, paths, new() { Targets = [target], Runs = [run], Parameters = parameters });
         var window = new MainWindow(vm);
@@ -104,7 +109,7 @@ internal static class PackageVerification
             Window = true, Icon = true, Frame = frame, DialogClose = new[] { searchClose, advancedSearchClose, hairpinClose, smartClose, backupClose },
             SelectionAutoSave = true, FastaImport = true, GenBankImport = true,
             ParameterRecommendation = true, ProjectParameterSharing = true,
-            SmartExport = true, SmartBindingFilters = true, TargetNavigation = true, CheckedOnlyDefault = true,
+            SmartExport = true, SmartBindingFilters = true, IndependentExportFiltersAndDrafts = true, TargetNavigation = true, CheckedOnlyDefault = true,
             AuditRepairs = true,
             IndependentReauditRepairs = true,
             RuntimeBundled = File.Exists(Path.Combine(AppContext.BaseDirectory, "System.Private.CoreLib.dll")) && File.Exists(Path.Combine(AppContext.BaseDirectory, "PresentationFramework.dll")),

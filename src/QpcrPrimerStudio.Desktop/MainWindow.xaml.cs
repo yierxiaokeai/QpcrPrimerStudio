@@ -57,7 +57,7 @@ public partial class MainWindow : Window
             SystemCommands.MaximizeWindow(this);
         }
     }
-    private void CloseWindow(object sender, RoutedEventArgs e) => SystemCommands.CloseWindow(this);
+    private void CloseWindow(object sender, RoutedEventArgs e) => Close();
     private void OpenHelp(object sender, RoutedEventArgs e)
     {
         var existing = OwnedWindows.OfType<HelpWindow>().FirstOrDefault();

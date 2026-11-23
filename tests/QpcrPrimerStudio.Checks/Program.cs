@@ -22,7 +22,9 @@ internal static class Program
             root = Path.GetFullPath(args.Length > 0 ? args[0] : Path.Combine(AppContext.BaseDirectory, "../../../../.."));
             work = Path.Combine(root, "artifacts", "checks", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss"));
             Directory.CreateDirectory(work);
-            RunAsync().GetAwaiter().GetResult();
+            if (args is [_, "--export-ui" or "--close-ui", var projectPath])
+                RenderWindow(ProjectStore.LoadAsync(projectPath).GetAwaiter().GetResult(), args[1]);
+            else RunAsync().GetAwaiter().GetResult();
             Console.WriteLine($"PASS: {passed} checks. Evidence: {work}");
             return 0;
         }
@@ -50,6 +52,7 @@ internal static class Program
         passed += await ParameterRecommendationChecks.RunAsync(root, work, target, run, executable);
         passed += await SmartExportChecks.RunAsync(root, work, target, run, executable);
         passed += await SmartBindingChecks.RunAsync(root, work, target, run);
+        passed += await WorkspaceReliabilityChecks.RunAsync(root, work);
         var thermo = await new Thermodynamics(Path.Combine(Path.GetDirectoryName(executable)!, "ntthal.exe"))
             .AnalyzeAsync(candidate.Forward.Sequence, candidate.Reverse.Sequence, parameters, CancellationToken.None);
         Assert(thermo.Contains("3′ 异二聚体") && thermo.Contains("dG"), "Real structure and thermodynamic outputs");
@@ -197,7 +200,7 @@ internal static class Program
         await AssertThrowsAsync<InvalidOperationException>(() => importer.ImportAsync(new("Broken", "checks", transcriptPath, genomePath, broken), Path.Combine(work, "broken-reference"), CancellationToken.None), "Malformed GFF3 is rejected");
         candidate.Assessment = original;
     }
-    private static void RenderWindow(ProjectDocument project)
+    private static void RenderWindow(ProjectDocument project, string? focus = null)
     {
         Exception? error = null;
         var thread = new Thread(() =>
@@ -209,6 +212,13 @@ internal static class Program
                 var window = new MainWindow(vm) { ShowActivated = false, ShowInTaskbar = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -20000, Top = -20000 }; vm.Restore(project);
                 window.Show(); window.UpdateLayout();
                 window.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Render);
+                if (focus == "--export-ui") { CheckExportPresentation(window, vm); app.Shutdown(); return; }
+                if (focus == "--close-ui")
+                {
+                    passed += SelectionAutoSaveUiChecks.Run(window, root, work, project);
+                    passed += ReauditInteractionUiChecks.Run(window, root, work, project);
+                    app.Shutdown(); return;
+                }
                 var visual = (FrameworkElement)window.Content;
                 var background = new DrawingVisual();
                 using (var drawing = background.RenderOpen()) { drawing.DrawRectangle(window.Background, null, new Rect(0, 0, visual.ActualWidth, visual.ActualHeight)); drawing.DrawRectangle(new VisualBrush(visual), null, new Rect(0, 0, visual.ActualWidth, visual.ActualHeight)); }
@@ -261,7 +271,10 @@ internal static class Program
                 Assert(!progress.IsVisible, "Idle task progress is hidden");
                 vm.IsBusy = true; window.UpdateLayout();
                 Assert(progress.IsVisible, "Running task progress is visible");
+                vm.Progress = 50; window.UpdateLayout();
+                Assert(!progress.IsIndeterminate && progress.Value == 50, "A reported batch fraction appears on the progress bar");
                 vm.IsBusy = false;
+                CheckExportPresentation(window, vm);
                 CheckSequenceInputFeedback(window, vm);
                 CheckHairpinScreeningUi(window, vm);
                 CheckCompactLayouts(window, vm);
@@ -355,6 +368,56 @@ internal static class Program
         });
         popup.ShowDialog(); Assert(popup.Settings?.AnnealingC == 60, "Hairpin settings confirm the actual experiment temperature");
         vm.HairpinSettings = new();
+    }
+    private static void CheckExportPresentation(MainWindow window, MainViewModel vm)
+    {
+        var button = (System.Windows.Controls.Button)window.FindName("OrdinaryExportButton");
+        var check = VisualChildren<System.Windows.Controls.CheckBox>(window).Single(c => c.Name == "SelectedOnlyCheckBox");
+        check.IsChecked = false; window.UpdateLayout();
+        Assert(Equals(button.Content, "导出全部保留项…"), "The toolbar reflects ordinary all-retained export across the project");
+        check.IsChecked = true; window.UpdateLayout();
+        Assert(Equals(button.Content, "导出勾选项…"), "The toolbar reflects ordinary checked-only export");
+
+        var project = vm.Snapshot(); var run = vm.SelectedRun!; var c = run.Candidates[0];
+        var chosen = new SmartGeneResult(run.Target.Id, run.Target.Id, c.Id, c.Rank, c.Assessment.Score,
+            c.Forward.Sequence, c.Reverse.Sequence, c.ProductLength, "已选出", "") { TranscriptBinding = "转录本库未检查" };
+        var missing = new SmartGeneResult("gene-B", "", "", null, null, "", "", null, "未导出",
+            "gene-B：没有候选通过筛选。转录本结合证据尚未核对完成：已绑定转录本数据库，请先完成该靶标的特异性检查，再进行智能导出。");
+        foreach (var empty in new[] { false, true })
+        {
+            var report = new SmartExportReport { Genes = empty ? [missing] : [chosen, missing],
+                Targets = [new("gene-B", "gene-B", null, 1, 0, 0, 0, 0, missing.Reason) { MismatchExcluded = 1 }] };
+            var preview = new SmartExportDialog(new(project, empty ? [] : [new(run.Target.Id, 0, 0)], report))
+                { Owner = window, ShowInTaskbar = false, ShowActivated = false, Width = empty ? 720 : 900, Height = 520 };
+            preview.Show(); preview.UpdateLayout();
+            preview.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            var tabs = (System.Windows.Controls.TabControl)preview.FindName("PreviewTabs");
+            var export = (System.Windows.Controls.Button)preview.FindName("ExportSmartButton");
+            var visibleText = VisualChildren<System.Windows.Controls.TextBlock>(tabs).Where(t => t.IsVisible).Select(t => t.Text);
+            Assert(empty ? tabs.SelectedIndex == 1 && !export.IsEnabled && visibleText.Contains(missing.Reason) :
+                tabs.SelectedIndex == 0 && export.IsEnabled && visibleText.Contains(chosen.TranscriptBinding),
+                empty ? "An empty smart preview opens the concrete omission reasons" : "Smart choices expose unchecked transcript evidence before export");
+            var grid = (System.Windows.Controls.DataGrid)preview.FindName(empty ? "SmartMissingGrid" : "SmartChoicesGrid");
+            var col = grid.Columns.Single(c => Equals(c.Header, empty ? "原因" : "转录本核对"));
+            var cell = VisualChildren<System.Windows.Controls.DataGridCell>(grid).First(c => c.Column == col);
+            var label = VisualChildren<System.Windows.Controls.TextBlock>(cell).First();
+            Assert(col.ActualWidth >= (empty ? 360 : 115) && label.DesiredSize.Height <= cell.ActualHeight + 1,
+                empty ? "Omission reasons fit in a readable wrapping row at compact width" : "Transcript status is readable in the chosen-pair row");
+            CaptureLayout(preview, empty ? "smart-preview-empty.png" : "smart-preview-choices.png");
+            if (!empty)
+            {
+                tabs.SelectedIndex = 2; preview.UpdateLayout();
+                preview.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                preview.UpdateLayout();
+                var audit = (System.Windows.Controls.DataGrid)preview.FindName("SmartTargetsGrid");
+                var details = VisualChildren<System.Windows.Controls.TextBlock>(audit).Single(t => t.IsVisible && t.Text == missing.Reason);
+                Assert(audit.Columns.Single(c => Equals(c.Header, "错配/未核对")).ActualWidth >= 90 &&
+                    details.ActualWidth <= audit.ActualWidth - 20 && details.ActualHeight + 1 >= details.DesiredSize.Height,
+                    "The audit tab shows labeled counts and wraps the first target's details within the viewport");
+                CaptureLayout(preview, "smart-preview-audit.png");
+            }
+            preview.Close();
+        }
     }
     private static void CheckCompactLayouts(MainWindow window, MainViewModel vm)
     {

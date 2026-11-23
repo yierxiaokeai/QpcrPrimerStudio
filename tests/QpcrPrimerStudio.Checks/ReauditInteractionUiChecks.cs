@@ -43,6 +43,8 @@ internal static class ReauditInteractionUiChecks
             Edit(template,a.Sequence+"单引物原稿"); vm.UseSinglePrimerCommand.Execute(null);
             Check(template.Text.EndsWith("单引物原稿") && vm.Status.Contains("草稿"),"The real single-primer loading entry preserves the unfinished same-gene template");
             vm.AddTargetCommand.Execute(null); Edit(template,"新基因 未完成原稿"); vm.TargetName="reaudit-ui-C";
+            Check(vm.SelectedSingleSearch is null && vm.SinglePrimers.Count == 0 && vm.Candidates.Count == 0,
+                "Adding a target clears the previous target's paired and single results while preserving search history");
             list.SelectedItem=b; owner.Dispatcher.Invoke(()=>{},DispatcherPriority.ApplicationIdle);
             Check(vm.Snapshot().UnassignedDraft?.TemplateText=="新基因 未完成原稿","Selecting a real left-side gene retains an unassigned raw draft");
             vm.AddTargetCommand.Execute(null); owner.Dispatcher.Invoke(()=>{},DispatcherPriority.ApplicationIdle);
@@ -83,7 +85,14 @@ internal static class ReauditInteractionUiChecks
                 var cancel=Visual<Button>(dialog).Single(button=>button.Name=="CancelButton");
                 ((IInvokeProvider)new ButtonAutomationPeer(cancel).GetPattern(PatternInterface.Invoke)).Invoke();
             };
-            timer.Start(); try { window.Close(); } finally { timer.Stop(); }
+            timer.Start();
+            try
+            {
+                var closeButton=(Button)window.FindName("CloseButton");
+                ((IInvokeProvider)new ButtonAutomationPeer(closeButton).GetPattern(PatternInterface.Invoke)).Invoke();
+                owner.Dispatcher.Invoke(()=>{},DispatcherPriority.ApplicationIdle);
+            }
+            finally { timer.Stop(); }
             Check(confirmation && !closed && vm.ManualForward=="after queued save raw F","Actual window close asks to save a later manual draft and cancelling preserves it");
             return count;
         }

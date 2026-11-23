@@ -4,7 +4,10 @@ namespace QpcrPrimerStudio.Core;
 
 public sealed record SmartExportChoice(string Gene, int RunIndex, int CandidateIndex);
 public sealed record SmartGeneResult(string Gene, string Target, string CandidateId, int? Rank, double? Score,
-    string Forward5to3, string Reverse5to3, int? ProductBp, string Status, string Reason);
+    string Forward5to3, string Reverse5to3, int? ProductBp, string Status, string Reason)
+{
+    public string TranscriptBinding { get; init; } = "";
+}
 public sealed record SmartTargetResult(string Gene, string Target, int? RunIndex, int Candidates, int QualityExcluded,
     int Unscored, int HairpinExcluded, int Retained, string Reason)
 {
@@ -64,6 +67,8 @@ public sealed class SmartExportEngine(string ntthal)
             else
             {
                 var run = project.Runs[runIndex];
+                var priorSmartScreen = run.SmartExportScreening;
+                run.SmartExportScreening = null;
                 var invalidations = new List<string>();
                 foreach (var candidate in run.Candidates)
                 {
@@ -89,29 +94,31 @@ public sealed class SmartExportEngine(string ntthal)
                         $"最近任务：{run.State}。{run.Message}");
                 else if (eligible.Count == 0)
                     record = new(gene, target.Id, runIndex, run.Candidates.Count, rejected, unscored, 0, 0,
-                        $"没有可用评分的合格候选：质量规则排除 {rejected} 对，未评分或评分无效 {unscored} 对，错配/插缺或未核对排除 {mismatchExcluded} 对。" +
-                        string.Join("；", invalidations.Distinct(StringComparer.Ordinal).Concat(mismatchReasons)));
+                        $"没有候选通过筛选：质量规则排除 {rejected} 对，未评分或评分无效 {unscored} 对，错配/插缺或未核对排除 {mismatchExcluded} 对。" +
+                        string.Join("；", invalidations.Concat(run.Candidates.SelectMany(c => c.Assessment.Rejections)).Distinct(StringComparer.Ordinal).Concat(mismatchReasons)));
                 else
                 {
                     try
                     {
                         var parameters = run.UsedParameters ?? project.Parameters;
-                        if (!CanReuse(run.HairpinScreening, eligible, parameters, settings, report.HairpinEngineSha256))
-                            run.HairpinScreening = await screening.ScreenAsync(eligible, parameters, settings, token);
-                        var screen = run.HairpinScreening!;
-                        // Re-evaluate the decision from the cached physical evidence and current thresholds.
-                        screen.Decisions = eligible.Select(c =>
-                        {
-                            var d = screen.DecisionFor(c) ?? throw new InvalidDataException("发卡筛选证据与候选不匹配。");
-                            return HairpinScreeningEngine.Decide(c.Id, d.Forward, d.Reverse, settings);
-                        }).ToList();
+                        var cached = new[] { priorSmartScreen, run.HairpinScreening }
+                            .FirstOrDefault(s => CanReuse(s, eligible, parameters, settings, report.HairpinEngineSha256));
+                        var screen = cached is null ? await screening.ScreenAsync(eligible, parameters, settings, token) :
+                            new HairpinScreeningReport { Settings = settings, Parameters = parameters, EngineSha256 = cached.EngineSha256,
+                                DeltaGTemperatureC = cached.DeltaGTemperatureC, AnalyzedAt = cached.AnalyzedAt,
+                                Decisions = eligible.Select(c =>
+                                {
+                                    var d = cached.DecisionFor(c)!;
+                                    return HairpinScreeningEngine.Decide(c.Id, d.Forward, d.Reverse, settings);
+                                }).ToList() };
+                        run.SmartExportScreening = screen;
                         var retained = eligible.Where(c => screen.DecisionFor(c)?.Excluded == false).ToList();
                         viable.AddRange(retained.Select(c => new SmartExportChoice(gene, runIndex, run.Candidates.IndexOf(c))));
                         record = new(gene, target.Id, runIndex, run.Candidates.Count, rejected, unscored,
                             eligible.Count - retained.Count, retained.Count, retained.Count == 0 ? "合格且已评分的候选全部触发高风险发卡排除条件。" : "完成筛选。");
                     }
                     catch (OperationCanceledException) { throw; }
-                    catch (Exception ex) when (ex is IOException or ArgumentException or InvalidOperationException or TimeoutException or System.ComponentModel.Win32Exception)
+                    catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException or InvalidOperationException or TimeoutException or System.ComponentModel.Win32Exception)
                     {
                         record = new(gene, target.Id, runIndex, run.Candidates.Count, rejected, unscored, 0, 0,
                             "发卡核对失败，本靶标未参与导出：" + ex.Message);
@@ -139,7 +146,8 @@ public sealed class SmartExportEngine(string ntthal)
                 report.Genes.Add(new(gene, c.TargetId, c.Id, c.Rank, c.Assessment.Score, c.Forward.Sequence,
                     c.Reverse.Sequence, c.ProductLength, "已选出", "最高综合评分；目标模板已确认零错配。" +
                     (c.Specificity.Any(r => r.Kind == "转录本") ? "预期转录本结合已核对。" : "转录本数据库未检查。") +
-                    "特异性与实验验证状态见质量证据。"));
+                    "特异性与实验验证状态见质量证据。")
+                    { TranscriptBinding = c.Specificity.Any(r => r.Kind == "转录本") ? "预期转录本已核对" : "转录本库未检查" });
             }
         }
         token.ThrowIfCancellationRequested();

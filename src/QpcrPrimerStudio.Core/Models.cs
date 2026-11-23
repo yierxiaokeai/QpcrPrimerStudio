@@ -139,6 +139,8 @@ public sealed class TargetRun
     public List<string> RegionEvidence { get; set; } = [];
     public Dictionary<string, int> RejectionCounts { get; set; } = [];
     public HairpinScreeningReport? HairpinScreening { get; set; }
+    // Smart previews retain their own evidence. HairpinScreening remains the filter applied to the candidate list.
+    public HairpinScreeningReport? SmartExportScreening { get; set; }
     public int AcceptedCount => Candidates.Count(c => c.Assessment.Accepted);
     public override string ToString() => $"{Target.Id} · {State} · {Candidates.Count} 对";
 }

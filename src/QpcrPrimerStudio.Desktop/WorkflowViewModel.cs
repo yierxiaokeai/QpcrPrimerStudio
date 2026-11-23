@@ -31,7 +31,9 @@ public partial class MainViewModel
     [ObservableProperty] private bool autoSpecificity = true;
     [ObservableProperty] private string scoreWeightsText = "{}";
     [ObservableProperty] private string coverageText = "";
-    [ObservableProperty] private bool isPaused;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(PauseActionLabel))] private bool isPaused;
+    [ObservableProperty] private bool canPauseTask;
+    public string PauseActionLabel => IsPaused ? "继续" : "暂停";
     [ObservableProperty] private double sequenceZoom = 1;
     [ObservableProperty] private TranscriptAnnotation? displayAnnotation;
     [ObservableProperty] private List<TranscriptVariant> displayVariants = [];
@@ -123,11 +125,15 @@ public partial class MainViewModel
     });
     [RelayCommand] private void PauseResume()
     {
-        if (!IsBusy) return;
+        if (!IsBusy || !CanPauseTask) return;
         if (IsPaused) { pauseGate?.TrySetResult(true); pauseGate = null; IsPaused = false; Status = "继续批量任务。"; }
         else { pauseGate = new(TaskCreationOptions.RunContinuationsAsynchronously); IsPaused = true; Status = "将在当前靶标结束后暂停。"; }
     }
-    private async Task WaitForResume(CancellationToken token) { if (pauseGate is { } gate) await gate.Task.WaitAsync(token); }
+    private async Task WaitForResume(CancellationToken token)
+    {
+        CanPauseTask = IsBusy;
+        if (pauseGate is { } gate) await gate.Task.WaitAsync(token);
+    }
     [RelayCommand(CanExecute = nameof(CanWork))] private async Task RetryFailedAsync() => await Busy(async token =>
     {
         var targets = Targets.Where(t => Runs.LastOrDefault(r => r.Target.Id == t.Id && r.Target.Sha256 == t.Sha256)?.State

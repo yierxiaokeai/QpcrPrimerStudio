@@ -46,7 +46,8 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private string status = "准备就绪 · SYBR Green RT-qPCR";
     [ObservableProperty] private bool isBusy;
     [ObservableProperty] private double progress;
-    [ObservableProperty] private bool selectedOnly = true;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OrdinaryExportLabel))] private bool selectedOnly = true;
+    public string OrdinaryExportLabel => SelectedOnly ? "导出勾选项…" : "导出全部保留项…";
     [ObservableProperty] private string databaseKind = "转录本";
     [ObservableProperty] private string databaseSummary = "尚未选择数据库";
 
@@ -268,8 +269,8 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanWork))] private void AddTarget()
     {
         if (SelectedTarget is null && HasUnassignedInput()) unassignedDraft = CurrentEditorDraft();
-        SelectedTarget = null; SelectedRun = null; SelectedCandidate = null; DisplayTarget = null; Candidates.Clear();
-        navigationTargetId = null;
+        SelectedTarget = null;
+        NavigateToTargetResults(null);
         TargetName = "target_" + (Targets.Count + 1); TemplateText = ""; JunctionText = ""; ExpectedText = ""; CoverageText = "";
         LoadPrimerDraft(null);
         InputExpanded = true; InputTabIndex = 0; ResultsTabIndex = 0;
@@ -294,7 +295,8 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanWork))] private async Task DesignCurrentAsync() => await Busy(async token => { ApplyTemplate(); await DesignTargetsAsync([SelectedTarget!], ReadParameters(), token); });
     [RelayCommand(CanExecute = nameof(CanWork))] private async Task DesignAllAsync() => await Busy(async token =>
     {
-        if (!string.IsNullOrWhiteSpace(TemplateText)) ApplyTemplate();
+        RequireSavedTargetInputs(includeSelected: false);
+        if (SelectedTarget is not null || !string.IsNullOrWhiteSpace(TemplateText)) ApplyTemplate();
         if (Targets.Count == 0) throw new InvalidOperationException("请先导入或填写模板序列。");
         await DesignTargetsAsync(Targets.ToList(), ReadParameters(), token);
     });
@@ -304,24 +306,35 @@ public partial class MainViewModel : ObservableObject
         var commonRegions = ReadRegionSettings();
         var jobReference = reference;
         var jobInputs = targets.Select(t => RegionsForTarget(commonRegions, t)).ToList();
+        var firstRun = Runs.Count;
         for (var i = 0; i < targets.Count; i++)
         {
-            await WaitForResume(token);
             var target = targets[i];
-            if (token.IsCancellationRequested)
-            {
-                for (var j = i; j < targets.Count; j++) Runs.Add(new TargetRun { Target = targets[j], State = "取消", Message = "用户取消，尚未开始此靶标。" });
-                token.ThrowIfCancellationRequested();
-            }
-            Status = $"设计 {i + 1}/{targets.Count}：{target.Id}";
             TargetRun? run = null;
-            try { run = await engine.DesignAsync(target, parameters, token, regions: jobInputs[i], reference: jobReference); await CheckRunSpecificityAsync(run, token); }
-            catch (OperationCanceledException) { run ??= new TargetRun { Target = target }; run.State = "取消"; run.Message += "\n用户取消，已生成候选与已完成检查保留。";
-                Runs.Add(run); SelectedRun = run; dirty = true; for (var j = i + 1; j < targets.Count; j++) Runs.Add(new TargetRun { Target = targets[j], State = "取消" }); throw; }
+            var started = false;
+            try
+            {
+                await WaitForResume(token);
+                token.ThrowIfCancellationRequested();
+                started = true; Status = $"设计 {i + 1}/{targets.Count}：{target.Id}";
+                run = await engine.DesignAsync(target, parameters, token, regions: jobInputs[i], reference: jobReference);
+                await CheckRunSpecificityAsync(run, token);
+            }
+            catch (OperationCanceledException)
+            {
+                run ??= new TargetRun { Target = target };
+                run.State = "取消"; run.Message += started ? "\n用户取消，已生成候选与已完成检查保留。" : "用户取消，尚未开始此靶标。";
+                Runs.Add(run); SelectedRun = run; dirty = true;
+                foreach (var remaining in targets.Skip(i + 1))
+                    Runs.Add(new TargetRun { Target = remaining, State = "取消", Message = "用户取消，尚未开始此靶标。" });
+                throw;
+            }
             catch (Exception ex) { run = new TargetRun { Target = target, State = "失败", Message = ex.Message }; }
             Runs.Add(run); SelectedRun = run; dirty = true; Progress = (i + 1) * 100d / targets.Count;
         }
-        Status = $"设计结束：{targets.Count} 个靶标；点击智能导出可为每个基因保留最高评分的一对。";
+        var completed = Runs.Skip(firstRun).Count(r => r.State == "完成" && r.AcceptedCount > 0);
+        Status = completed == targets.Count ? $"设计完成：{completed} 个靶标均有合格候选。" :
+            $"设计结束：{completed}/{targets.Count} 个靶标有合格候选。请在“任务记录”查看其余靶标的原因。";
     }
     [RelayCommand(CanExecute = nameof(CanWork))] private async Task AnalyzeManualAsync() => await Busy(async token =>
     {
@@ -424,9 +437,14 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanWork))] private async Task NewProjectAsync() { await FlushSelectionSavesAsync(); if (!ConfirmDiscard()) return; Restore(new ProjectDocument()); TargetName = "target_1"; TemplateText = ""; ProjectPath = "尚未保存"; dirty = false; }
     [RelayCommand(CanExecute = nameof(CanWork))] private void Export() => TryAction(() =>
     {
-        var dialog = new SaveFileDialog { Filter = "Excel 工作簿|*.xlsx|CSV 表格|*.csv", FileName = "qPCR-primers.xlsx" };
+        var scope = ResultExporter.DescribeOrdinaryExport(Runs, SelectedOnly);
+        if (scope.EmptyReason is { } reason) { Status = reason; return; }
+        var summary = $"{scope.Targets} 个靶标，{scope.Pairs} 对引物";
+        var dialog = new SaveFileDialog { Title = $"{(SelectedOnly ? "导出勾选项" : "导出全部保留项")} · {summary}",
+            Filter = "Excel 工作簿|*.xlsx|CSV 表格|*.csv", FileName = "qPCR-primers.xlsx" };
         if (dialog.ShowDialog() != true) return;
-        ResultExporter.Export(dialog.FileName, Snapshot(), SelectedOnly); Status = "结果已导出：" + dialog.FileName;
+        if (Path.GetExtension(dialog.FileName).ToLowerInvariant() is not (".xlsx" or ".csv")) throw new ArgumentException("请将引物保存为 .xlsx 或 .csv 文件。");
+        ResultExporter.Export(dialog.FileName, Snapshot(), SelectedOnly); Status = $"已导出 {summary}：{dialog.FileName}";
     });
     [RelayCommand] private void Cancel() => cancellation?.Cancel();
     [RelayCommand] private void ToggleTheme()
@@ -459,10 +477,15 @@ public partial class MainViewModel : ObservableObject
         try { await work(cancellation.Token); }
         catch (OperationCanceledException) { Status = "任务已取消；已完成结果保留。"; }
         catch (Exception ex) { ReportError(ex); }
-        finally { cancellation.Dispose(); cancellation = null; pauseGate?.TrySetResult(true); pauseGate = null; IsPaused = false; IsBusy = false; }
+        finally { cancellation.Dispose(); cancellation = null; pauseGate?.TrySetResult(true); pauseGate = null; IsPaused = false; CanPauseTask = false; IsBusy = false; }
     }
     private void TryAction(Action action) { try { action(); } catch (Exception ex) { ReportError(ex); } }
-    private void ReportError(Exception ex) { Status = "操作失败：" + ex.Message; LogText += $"\n{DateTimeOffset.Now:O}\n{ex}"; File.AppendAllText(Path.Combine(storageRoot, "errors.log"), $"{DateTimeOffset.Now:O}\n{ex}\n"); }
+    private void ReportError(Exception ex)
+    {
+        Status = "操作失败：" + ex.Message;
+        LogText += $"\n{DateTimeOffset.Now:O}\n{ex}";
+        if (DiagnosticLog.TryAppend(storageRoot, ex) is { } warning) LogText += "\n" + warning;
+    }
     private PrimerCandidate RequiredCandidate() => SelectedCandidate ?? throw new InvalidOperationException("请先选择候选。");
     private static int Int(string value) => int.Parse(value.Trim(), CultureInfo.InvariantCulture);
     private static double Num(string value) => double.Parse(value.Trim(), CultureInfo.InvariantCulture);

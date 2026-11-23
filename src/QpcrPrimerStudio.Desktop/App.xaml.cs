@@ -26,9 +26,8 @@ public partial class App : Application
         DispatcherUnhandledException += (_, args) =>
         {
             var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "QpcrPrimerStudio");
-            Directory.CreateDirectory(folder);
-            File.AppendAllText(Path.Combine(folder, "errors.log"), $"{DateTimeOffset.Now:O}\n{args.Exception}\n");
-            MessageBox.Show("操作失败，详细错误已保存。\n" + args.Exception.Message, "qPCR Primer Studio", MessageBoxButton.OK, MessageBoxImage.Error);
+            var warning = DiagnosticLog.TryAppend(folder, args.Exception);
+            MessageBox.Show("操作失败：" + args.Exception.Message + "\n" + (warning ?? "详细错误已写入日志。"), "qPCR Primer Studio", MessageBoxButton.OK, MessageBoxImage.Error);
             args.Handled = true;
         };
         var viewModel = new MainViewModel();

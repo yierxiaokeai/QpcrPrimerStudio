@@ -100,7 +100,8 @@ public static class ProjectValidation
             if (run.Candidates.Count > 0)
             {
                 Parameters(run.UsedParameters ?? run.Target.ParameterOverride ?? project.Parameters, run.Target.Sequence.Length);
-                if (run.HairpinScreening is { } screen) { Parameters(screen.Parameters, run.Target.Sequence.Length); HairpinSettings(screen.Settings); }
+                foreach (var screen in new[] { run.HairpinScreening, run.SmartExportScreening }.OfType<HairpinScreeningReport>())
+                { Parameters(screen.Parameters, run.Target.Sequence.Length); HairpinSettings(screen.Settings); }
             }
             if (run.Candidates.Select(c => c.Id).Distinct().Count() != run.Candidates.Count) throw new InvalidDataException("任务包含重复候选 ID。");
             foreach (var c in run.Candidates)

@@ -66,6 +66,36 @@ public partial class MainViewModel
             ExpectedText != string.Join(",", target.ExpectedSubjects) || CoverageText != string.Join(",", CoverageFor(target)))
             throw new InvalidOperationException("当前靶标有未保存的序列或目标信息草稿，请先保存序列再载入引物；原始输入已保留。");
     }
+    private void RequireSavedTargetInputs(bool includeSelected)
+    {
+        var pending = new List<string>();
+        foreach (var target in Targets)
+        {
+            var current = target.Id == SelectedTarget?.Id;
+            if (current && !includeSelected) continue; // Batch design applies the visible editor itself.
+            var draft = current ? CurrentEditorDraft() : targetDrafts.GetValueOrDefault(target.Id);
+            if (draft is null) continue;
+            var sequenceMatches = draft.TemplateText == target.Sequence;
+            if (!sequenceMatches)
+            {
+                try { sequenceMatches = (current ? NormalizeTemplate() : SequenceFiles.Normalize(draft.TemplateText)) == target.Sequence; }
+                catch (SequenceInputException) { sequenceMatches = false; }
+            }
+            var junctions = new HashSet<int>(); var validJunctions = true;
+            foreach (var part in Items(draft.JunctionText))
+            {
+                if (!int.TryParse(part, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var position))
+                { validJunctions = false; break; }
+                junctions.Add(position);
+            }
+            if (!sequenceMatches || draft.TargetName.Trim() != target.Id || !validJunctions || !junctions.SetEquals(target.Junctions) ||
+                !Items(draft.ExpectedText).ToHashSet(StringComparer.Ordinal).SetEquals(target.ExpectedSubjects) ||
+                !Items(draft.CoverageText).ToHashSet(StringComparer.Ordinal).SetEquals(CoverageFor(target))) pending.Add(target.Id);
+        }
+        if (pending.Count > 0)
+            throw new InvalidOperationException($"以下靶标的模板或目标信息尚未保存：{string.Join("、", pending)}。请在左侧选中对应靶标，点击“保存序列”，并用更新后的模板重新设计。");
+        static string[] Items(string text) => text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
     private void RequirePrimerDraftPreserved(string forward, string reverse)
     {
         if (primerDraftModified && (ManualForward.Length > 0 || ManualReverse.Length > 0) && (ManualForward != forward || ManualReverse != reverse))
